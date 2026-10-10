@@ -9,6 +9,6 @@ public class Category
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
     //Navigations
-    public List<ItemCategory> itemCategories { get; set; } = new();
+    public List<ItemCategory> ItemCategories { get; set; } = new();
     //
 }

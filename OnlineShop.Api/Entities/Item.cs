@@ -15,7 +15,7 @@ public class Item
     //
     
     //Navigations
-    public List<ItemCategory> itemCategories { get; set; } = new();
+    public List<ItemCategory> ItemCategories { get; set; } = new();
     public List<Rating> Ratings { get; set; } = new();
     public List<Comment> Comments { get; set; } = new();
     //

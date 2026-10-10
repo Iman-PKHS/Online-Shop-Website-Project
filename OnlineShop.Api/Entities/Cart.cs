@@ -10,6 +10,6 @@ public class Cart
     
     //Navigations
     public User User { get; set; } = null!;
-    public List<CartItem> CardItems { get; set;} = new();
+    public List<CartItem> CartItems { get; set; } = new();
     //
 }
