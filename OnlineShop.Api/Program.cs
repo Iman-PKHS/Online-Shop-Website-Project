@@ -1,6 +1,9 @@
 using Microsoft.OpenApi;
 using Microsoft.EntityFrameworkCore;
 using OnlineShop.Api.Data;
+using OnlineShop.Api.Interfaces;
+using OnlineShop.Api.Services;
+using OnlineShop.Api.Helpers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,8 +27,13 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 var app = builder.Build();
 
