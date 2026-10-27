@@ -4,11 +4,11 @@ namespace OnlineShop.Api.DTOs;
 
 public class LoginRequest
 {
-    [Required]
-    [StringLength(254)]
+    [Required(ErrorMessage = "نام کاربری یا ایمیل الزامی است.")]
+    [StringLength(254, ErrorMessage = "نام کاربری یا ایمیل نباید بیشتر از 254 کاراکتر باشد.")]
     public string UsernameOrEmail { get; set; } = string.Empty;
 
-    [Required]
-    [StringLength(64, MinimumLength = 8)]
+    [Required(ErrorMessage = "رمز عبور الزامی است.")]
+    [StringLength(64, MinimumLength = 8, ErrorMessage = "رمز عبور باید بین 8 تا 64 کاراکتر باشد.")]
     public string Password { get; set; } = string.Empty;
 }
