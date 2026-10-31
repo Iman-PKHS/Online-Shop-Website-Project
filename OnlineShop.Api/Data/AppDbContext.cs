@@ -1,8 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-
 using OnlineShop.Api.Entities; 
-
-using OnlineShop.Api.Entities.Enums; 
 
 namespace OnlineShop.Api.Data;
 public class AppDbContext : DbContext

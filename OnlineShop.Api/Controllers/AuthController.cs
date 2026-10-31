@@ -86,7 +86,7 @@ public class AuthController : ControllerBase
     }
     ////
     
-    //َAuthorize
+    [Authorize]
     [HttpPut("change-username")]
     public async Task<IActionResult> ChangeUsername(ChangeUsernameRequest request)
     {
@@ -116,9 +116,8 @@ public class AuthController : ControllerBase
         
         return Ok(_tokens.CreateToken(user));
     }
-    ////
     
-    //َAuthorize
+    [Authorize]
     [HttpPut("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
     {
