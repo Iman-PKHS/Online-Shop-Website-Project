@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using OnlineShop.Api.Data;
 using OnlineShop.Api.DTOs;
 using OnlineShop.Api.Entities;
+using OnlineShop.Api.Helpers;
 
 namespace OnlineShop.Api.Controllers;
 
@@ -19,7 +20,7 @@ public class AdminCategoryController : ControllerBase
         _db = db;
     }
 
-    private static CategoryResponse ToResponse(Category c) => new()
+    private static AdminCategoryResponse ToResponse(Category c) => new()
     {
         Id = c.Id,
         Name = c.Name,
@@ -49,7 +50,7 @@ public class AdminCategoryController : ControllerBase
             .OrderBy(c => c.Name)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(c => new CategoryResponse
+            .Select(c => new AdminCategoryResponse
             {
                 Id = c.Id,
                 Name = c.Name,
@@ -58,7 +59,7 @@ public class AdminCategoryController : ControllerBase
             })
             .ToListAsync();
         
-        return Ok(new PagedResult<CategoryResponse>
+        return Ok(new PagedResult<AdminCategoryResponse>
         {
             Items = items,
             Page = paging.Page,
@@ -72,7 +73,7 @@ public class AdminCategoryController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CategoryRequest request)
     {
-        var name = request.Name.Trim();
+        var name = TextNormalizer.Normalize(request.Name);
         if (name.Length == 0)
             return BadRequest(new { message = "نام دسته بندی الزامی است." });
 
@@ -119,7 +120,7 @@ public class AdminCategoryController : ControllerBase
         if (category is null)
             return NotFound(new { message = "دسته بندی مورد نظر یافت نشد." });
 
-        var name = request.Name.Trim();
+        var name = TextNormalizer.Normalize(request.Name);
         if (name.Length == 0)
             return BadRequest(new { message = "نام دسته بندی الزامی است." });
 

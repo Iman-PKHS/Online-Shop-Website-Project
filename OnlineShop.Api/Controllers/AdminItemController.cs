@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using OnlineShop.Api.Data;
 using OnlineShop.Api.DTOs;
 using OnlineShop.Api.Entities;
+using OnlineShop.Api.Helpers;
 
 namespace OnlineShop.Api.Controllers;
 
@@ -118,7 +119,7 @@ public class AdminItemController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(ItemRequest request)
     {
-       var name = request.Name.Trim();
+       var name = TextNormalizer.Normalize(request.Name);
         if (name.Length == 0)
             return BadRequest(new { message = "نام کالا الزامی است." });
         
@@ -130,7 +131,7 @@ public class AdminItemController : ControllerBase
         var item = new Item
         {
             Name = name,
-            Description = request.Description.Trim(),
+            Description = TextNormalizer.Normalize(request.Description),
             Price = request.Price,
             StockQuantity = request.StockQuantity,
             ImageUrl = request.ImageUrl.Trim(),
@@ -153,12 +154,12 @@ public class AdminItemController : ControllerBase
         if (item is null)
             return NotFound(new { message = "کالای مورد نظر یافت نشد." });
 
-        var name = request.Name.Trim();
+        var name = TextNormalizer.Normalize(request.Name);
         if (name.Length == 0)
             return BadRequest(new { message = "نام کالا الزامی است." });
         
         item.Name = name;
-        item.Description = request.Description.Trim();
+        item.Description = TextNormalizer.Normalize(request.Description);
         item.Price = request.Price;
         item.StockQuantity = request.StockQuantity;
         item.ImageUrl = request.ImageUrl.Trim();
