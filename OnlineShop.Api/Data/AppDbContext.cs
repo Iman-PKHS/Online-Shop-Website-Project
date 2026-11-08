@@ -20,7 +20,7 @@ public class AppDbContext : DbContext
             e.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
 
             e.Property(u => u.Username).HasMaxLength(50);
-            e.Property(u => u.Email).HasMaxLength(100);
+            e.Property(u => u.Email).HasMaxLength(254);
 
             e.Property(u => u.PasswordHash).HasMaxLength(255);
 
@@ -30,9 +30,9 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Item>(e =>
         {
-            e.Property(i => i.Name).HasMaxLength(100);
-            e.Property(i => i.Description).HasMaxLength(255);
-            e.Property(i => i.ImageUrl).HasMaxLength(255);
+            e.Property(i => i.Name).HasMaxLength(200);
+            e.Property(i => i.Description).HasMaxLength(2000);
+            e.Property(i => i.ImageUrl).HasMaxLength(500);
 
             e.ToTable(t =>
             {
@@ -72,6 +72,8 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<CartItem>(e =>
         {
+            e.HasIndex(ci => new { ci.CartId, ci.ItemId }).IsUnique();
+            
             e.HasOne(ci => ci.Cart)
             .WithMany(c => c.CartItems)
             .HasForeignKey(ci => ci.CartId)
@@ -96,6 +98,8 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<WishlistItem>(e =>
         {
+            e.HasIndex(wi => new { wi.WishlistId, wi.ItemId }).IsUnique();
+            
             e.HasOne(wi => wi.Wishlist)
             .WithMany(w => w.WishlistItems)
             .HasForeignKey(wi => wi.WishlistId)

@@ -9,7 +9,7 @@ public class ChangeUsernameRequest
     private const string UsernamePattern =
     @"^[a-zA-Z0-9_" +
     @"\u0600-\u06FF" +
-    @"\u200C]+$";          
+    @"\u200C ]+$";          
     [RegularExpression(UsernamePattern, ErrorMessage = "نام کاربری باید شامل حروف انگلیسی، اعداد، زیرخط، حروف فارسی و نیم‌فاصله باشد.")]
     public string NewUsername { get; set; } = string.Empty;
 }

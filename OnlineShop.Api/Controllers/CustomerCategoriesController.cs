@@ -19,20 +19,6 @@ public class CustomerCategoriesController : ControllerBase
         _db = db;
     }
 
-    private static readonly Expression<Func<Item, ItemSummary>> ToSummary = i => new ItemSummary
-    {
-        Id = i.Id,
-        Name = i.Name,
-        Price = i.Price,
-        ImageUrl = i.ImageUrl,
-        InStock = i.StockQuantity > 0,
-        AverageRating = i.Ratings.Average(r => (double?)r.Stars),
-        Categories = i.ItemCategories
-            .Where(ic => ic.Category.IsActive)
-            .Select(ic => new CategorySummary { Id = ic.Category.Id, Name = ic.Category.Name })
-            .ToList()
-    };
-
     ////Get Categories
     [HttpGet]
     public async Task<ActionResult> GetAll([FromQuery] PagingQuery paging)
@@ -82,7 +68,7 @@ public class CustomerCategoriesController : ControllerBase
             .OrderByDescending(i => i.Id)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(ToSummary)
+            .Select(ItemMappings.ToSummary)
             .ToListAsync();
         
         return Ok(new CategoryWithItems

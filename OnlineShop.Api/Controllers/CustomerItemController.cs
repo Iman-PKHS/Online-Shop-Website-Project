@@ -20,20 +20,6 @@ public class CustomerItemController : ControllerBase
         _db = db;
     }
 
-    private static readonly Expression<Func<Item, ItemSummary>> ToSummary = i => new ItemSummary
-    {
-        Id = i.Id,
-        Name = i.Name,
-        Price = i.Price,
-        ImageUrl = i.ImageUrl,
-        InStock = i.StockQuantity>0,
-        AverageRating = i.Ratings.Average(r => (double?)r.Stars),
-        Categories = i.ItemCategories
-            .Where(ic => ic.Category.IsActive)
-            .Select(ic => new CategorySummary{Id = ic.Category.Id,Name = ic.Category.Name})
-            .ToList()
-    };
-
     private static readonly Expression<Func<Item, ItemDetail>> ToDetail = i => new ItemDetail
     {
         Id = i.Id,
@@ -42,6 +28,8 @@ public class CustomerItemController : ControllerBase
         Price = i.Price,
         ImageUrl = i.ImageUrl,
         InStock = i.StockQuantity > 0,
+        StockLeft = i.StockQuantity > 0 && i.StockQuantity < 10 
+            ? i.StockQuantity : (int?)null,
         AverageRating = i.Ratings.Average(r => (double?)r.Stars),
         RatingCount = i.Ratings.Count(),
         CommentCount = i.Comments.Count(c => c.IsVisible),
@@ -89,7 +77,7 @@ public class CustomerItemController : ControllerBase
                 message = "مرتب‌سازی نامعتبر است.",
                 allowed = AllowedSorts
             });
-    //
+        //
 
         ////CategoryID Input Validation
         List<int>? categoryIds = null;
@@ -101,26 +89,33 @@ public class CustomerItemController : ControllerBase
         }
         //
 
+        ////Categories Name Input
+        if (!string.IsNullOrWhiteSpace(q.Categories))
+        {
+            var names = q.Categories
+                .Split(new[] { ',', '،' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(TextNormalizer.Normalize)
+                .ToList();
+
+            var activeCategories = await _db.Categories
+                .AsNoTracking()
+                .Where(c => c.IsActive)
+                .Select(c => new { c.Id, c.Name })
+                .ToListAsync();
+
+            var matchedIds = activeCategories
+                .Where(c => names.Contains(c.Name, StringComparer.OrdinalIgnoreCase))
+                .Select(c => c.Id)
+                .ToList();
+
+            categoryIds = (categoryIds ?? new List<int>()).Concat(matchedIds).Distinct().ToList();
+        }
+        //
+
         ////Query
         var query = _db.Items.AsNoTracking().Where(i => i.IsActive);
 
-        var words = (q.Search ?? string.Empty)
-            .Split(new[] { ' ', 'و', '،' },
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(TextNormalizer.Normalize)
-            .Distinct()
-            .Take(5)
-            .ToList();
-        
-        foreach (var word in words)
-        {
-            var pattern = $"%{word}%";
-            query = query.Where(i =>
-                EF.Functions.Like(i.Name, pattern) ||
-                i.ItemCategories.Any(ic =>
-                    ic.Category.IsActive &&
-                    EF.Functions.Like(ic.Category.Name, pattern)));
-        }
+        query = query.ApplySearch(q.Search, activeCategoriesOnly: true);
 
         if (categoryIds is not null)
             query = query.Where(i => i.ItemCategories.Any(ic =>
@@ -168,7 +163,7 @@ public class CustomerItemController : ControllerBase
         var items = await ordered
             .Skip(q.Skip)
             .Take(q.PageSize)
-            .Select(ToSummary)
+            .Select(ItemMappings.ToSummary)
             .ToListAsync();
         //
 

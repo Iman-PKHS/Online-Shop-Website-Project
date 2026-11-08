@@ -36,7 +36,11 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
-        var username = TextNormalizer.Normalize(request.Username);
+        var username = TextNormalizer.NormalizeUsername(request.Username);
+
+        if (username.Length < 3 || username.Length > 50)
+            return BadRequest(new { message = "نام کاربری باید بین 3 تا 50 کاراکتر باشد." });
+
         var email = request.Email.Trim();
 
         if (await _db.Users.AnyAsync(u => u.Username == username))
@@ -71,7 +75,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
-        var input = TextNormalizer.Normalize(request.UsernameOrEmail);
+        var input = TextNormalizer.NormalizeUsername(request.UsernameOrEmail);
 
         var user = await _db.Users.FirstOrDefaultAsync(u =>
             u.Username == input || u.Email == input);
@@ -98,7 +102,10 @@ public class AuthController : ControllerBase
         if (user is null || !user.IsActive)
             return Unauthorized();
 
-        var newUsername = TextNormalizer.Normalize(request.NewUsername);
+        var newUsername = TextNormalizer.NormalizeUsername(request.NewUsername);
+
+        if (newUsername.Length < 3 || newUsername.Length > 50)
+            return BadRequest(new{messafe = "نام کاربری باید بین 3 تا 50 کاراکتر باشد."});
 
         if (await _db.Users.AnyAsync(u => u.Username == newUsername && u.Id != user.Id))
             return Conflict(new { message = "این نام کاربری توسط کاربر دیگری انتخاب شده است." });

@@ -11,6 +11,6 @@ public class WishlistItem
     
     //Navigations
     public Wishlist Wishlist { get; set; } = null!;
-    public Item Item { get; set;} = new();
+    public Item Item { get; set;} = null!;
     //
 }

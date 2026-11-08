@@ -16,4 +16,8 @@ public static class TextNormalizer
 
         return s;
     }
+
+    public static string NormalizeUsername(string input) =>
+        System.Text.RegularExpressions.Regex.Replace
+        (Normalize(input), @"\s+", " ");
 }

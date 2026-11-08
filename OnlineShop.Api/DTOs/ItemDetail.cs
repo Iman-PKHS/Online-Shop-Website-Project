@@ -8,6 +8,7 @@ public class ItemDetail
     public long Price { get; set; }
     public string ImageUrl { get; set; } = string.Empty;
     public bool InStock { get; set; }
+    public int? StockLeft { get; set; }
     public double? AverageRating { get; set; }
     public int RatingCount { get; set; }
     public int CommentCount { get; set; }

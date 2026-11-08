@@ -72,10 +72,9 @@ public class AdminItemController : ControllerBase
         var query = _db.Items.AsNoTracking().AsQueryable();
 
         var term = search?.Trim();
-        if (!string.IsNullOrEmpty(term))
-        {
-            query = query.Where(i => EF.Functions.Like(i.Name, $"%{term}%"));
-        }
+        
+        query = query.ApplySearch(search, activeCategoriesOnly: false);
+
         if (isActive.HasValue)
         {
             query = query.Where(i => i.IsActive == isActive.Value);
@@ -123,6 +122,24 @@ public class AdminItemController : ControllerBase
         if (name.Length == 0)
             return BadRequest(new { message = "نام کالا الزامی است." });
         
+        var description = TextNormalizer.Normalize(request.Description);
+        if (description.Length == 0)
+            return BadRequest(new { message = "توضیحات کالا الزامی است." });
+        
+        var duplicate = await _db.Items
+            .Where(i => i.Name == name && i.Description == description)
+            .Select(i => new { i.Id, i.IsActive })
+            .FirstOrDefaultAsync();
+
+        if (duplicate is not null)
+            return Conflict(new
+            {
+                message = duplicate.IsActive
+                    ? "کالایی با همین نام و توضیحات قبلاً ثبت شده است."
+                    : $"کالایی با همین نام و توضیحات غیرفعال است (id {duplicate.Id}). آن را بازیابی کنید.",
+                existingItemId = duplicate.Id
+            });
+
         var ids = request.CategoryIds.Distinct().ToList();
         var error = await CheckCategoriesAsync(ids);
         if (error is not null)
@@ -131,7 +148,7 @@ public class AdminItemController : ControllerBase
         var item = new Item
         {
             Name = name,
-            Description = TextNormalizer.Normalize(request.Description),
+            Description = description,
             Price = request.Price,
             StockQuantity = request.StockQuantity,
             ImageUrl = request.ImageUrl.Trim(),
@@ -158,10 +175,13 @@ public class AdminItemController : ControllerBase
         if (name.Length == 0)
             return BadRequest(new { message = "نام کالا الزامی است." });
         
+        var description = TextNormalizer.Normalize(request.Description);
+        if (description.Length == 0)
+            return BadRequest(new { message = "توضیحات کالا الزامی است." });
+        
         item.Name = name;
-        item.Description = TextNormalizer.Normalize(request.Description);
+        item.Description = description;
         item.Price = request.Price;
-        item.StockQuantity = request.StockQuantity;
         item.ImageUrl = request.ImageUrl.Trim();
         item.IsActive = request.IsActive;
         item.UpdatedAt = DateTime.UtcNow;

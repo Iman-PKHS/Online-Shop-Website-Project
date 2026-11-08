@@ -37,7 +37,7 @@ public class AdminCategoryController : ControllerBase
     {
         var query = _db.Categories.AsNoTracking().AsQueryable();
 
-        var term = search?.Trim();
+        var term = search is null ? null : TextNormalizer.Normalize(search);
         if (!string.IsNullOrEmpty(term))
             query = query.Where(c => EF.Functions.Like(c.Name, $"%{term}%"));
 
