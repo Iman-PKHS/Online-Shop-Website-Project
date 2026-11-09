@@ -12,6 +12,7 @@ public class Payment
     public PaymentStatus Status { get; set;}
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? PaidAt { get; set;}
+    public string? FailureReason { get; set; }
     //
 
     //Navigations

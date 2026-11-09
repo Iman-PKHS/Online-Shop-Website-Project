@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using OnlineShop.Api.Data;
 using OnlineShop.Api.DTOs;
 using OnlineShop.Api.Entities;
+using OnlineShop.Api.Entities.Enums;
 using OnlineShop.Api.Helpers;
 
 namespace OnlineShop.Api.Controllers;
@@ -61,6 +62,8 @@ public class WishlistController : ControllerBase
             .Take(paging.PageSize)
             .Select(ToLine)
             .ToListAsync();
+        
+        await MarkPurchasedAsync(items, userId.Value);
 
         return Ok(new PagedResult<WishlistItemResponse>
         {
@@ -214,7 +217,7 @@ public class WishlistController : ControllerBase
         return Ok(new
         {
             message = "کالا به سبد خرید منتقل شد.",
-            cartItemId = cartLine.Id,
+            itemId = cartLine.ItemId,
             quantity = cartLine.Quantity
         });
     }
@@ -238,6 +241,46 @@ public class WishlistController : ControllerBase
         return NoContent();
     }
     //
+
+    ////Purchased Marking
+    private async Task MarkPurchasedAsync(List<WishlistItemResponse> lines, int userId)
+    {
+        if (lines.Count == 0) return;
+
+        var ids = lines.Select(l => l.ItemId).ToList();
+
+        var paidOrders = await _db.Payments
+            .AsNoTracking()
+            .Where(p => p.Status == PaymentStatus.Paid && p.PaidAt != null && p.Order.UserId == userId)
+            .Select(p => new { p.OrderId, PaidAt = p.PaidAt!.Value })
+            .ToListAsync();
+
+        if (paidOrders.Count == 0) return;
+
+        var orderIds = paidOrders.Select(p => p.OrderId).ToList();
+
+        var bought = await _db.OrderItems
+            .AsNoTracking()
+            .Where(oi => orderIds.Contains(oi.OrderId) && ids.Contains(oi.ItemId))
+            .Select(oi => new { oi.OrderId, oi.ItemId })
+            .ToListAsync();
+
+        var paidAtByOrder = paidOrders.ToDictionary(p => p.OrderId, p => p.PaidAt);
+
+        var latest = bought
+            .GroupBy(b => b.ItemId)
+            .ToDictionary(g => g.Key, g => g.Max(b => paidAtByOrder[b.OrderId]));
+
+        foreach (var line in lines)
+        {
+            if (latest.TryGetValue(line.ItemId, out var when) && when > line.AddedAt)
+            {
+                line.Purchased = true;
+                line.PurchasedAt = when;
+            }
+        }
+    }
+        
 
 
 

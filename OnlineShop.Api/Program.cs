@@ -70,7 +70,10 @@ builder.Services
             RoleClaimType = ClaimTypes.Role
         };
     });    
+
 builder.Services.AddAuthorization();
+
+builder.Services.AddScoped<IPaymentService, FakePaymentService>();
 
 var app = builder.Build();
 

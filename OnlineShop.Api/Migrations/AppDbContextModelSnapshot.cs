@@ -34,7 +34,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Carts", (string)null);
+                    b.ToTable("Carts");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.CartItem", b =>
@@ -62,7 +62,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("CartId", "ItemId")
                         .IsUnique();
 
-                    b.ToTable("CartItems", null, t =>
+                    b.ToTable("CartItems", t =>
                         {
                             t.HasCheckConstraint("CK_CartItems_Quantity", "Quantity >= 1");
                         });
@@ -87,7 +87,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Categories", (string)null);
+                    b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.Comment", b =>
@@ -122,7 +122,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Comments", (string)null);
+                    b.ToTable("Comments");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.CommentReply", b =>
@@ -154,7 +154,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasIndex("CommentId");
 
-                    b.ToTable("CommentReplies", (string)null);
+                    b.ToTable("CommentReplies");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.Item", b =>
@@ -168,12 +168,12 @@ namespace OnlineShop.Api.Migrations
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasMaxLength(255)
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ImageUrl")
                         .IsRequired()
-                        .HasMaxLength(255)
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
@@ -181,7 +181,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(100)
+                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<long>("Price")
@@ -195,7 +195,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Items", null, t =>
+                    b.ToTable("Items", t =>
                         {
                             t.HasCheckConstraint("CK_Items_Price", "Price >= 0");
 
@@ -215,7 +215,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("ItemCategories", (string)null);
+                    b.ToTable("ItemCategories");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.Order", b =>
@@ -247,7 +247,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Orders", (string)null);
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.OrderItem", b =>
@@ -282,7 +282,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("OrderItems", null, t =>
+                    b.ToTable("OrderItems", t =>
                         {
                             t.HasCheckConstraint("CK_OrderItems_Quantity", "Quantity >= 1");
                         });
@@ -298,6 +298,10 @@ namespace OnlineShop.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("OrderId")
@@ -321,7 +325,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("ReferenceId")
                         .IsUnique();
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.Rating", b =>
@@ -352,7 +356,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("UserId", "ItemId")
                         .IsUnique();
 
-                    b.ToTable("Ratings", null, t =>
+                    b.ToTable("Ratings", t =>
                         {
                             t.HasCheckConstraint("CK_Ratings_Stars", "Stars >= 1 AND Stars <= 5");
                         });
@@ -369,7 +373,7 @@ namespace OnlineShop.Api.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasMaxLength(100)
+                        .HasMaxLength(254)
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
 
@@ -400,7 +404,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.Wishlist", b =>
@@ -420,7 +424,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Wishlists", (string)null);
+                    b.ToTable("Wishlists");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.WishlistItem", b =>
@@ -445,7 +449,7 @@ namespace OnlineShop.Api.Migrations
                     b.HasIndex("WishlistId", "ItemId")
                         .IsUnique();
 
-                    b.ToTable("WishlistItems", (string)null);
+                    b.ToTable("WishlistItems");
                 });
 
             modelBuilder.Entity("OnlineShop.Api.Entities.Cart", b =>

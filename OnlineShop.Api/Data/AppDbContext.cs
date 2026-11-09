@@ -143,6 +143,8 @@ public class AppDbContext : DbContext
         {
             e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             
+            e.Property(p => p.FailureReason).HasMaxLength(300);
+            
             e.HasIndex(p => p.ReferenceId).IsUnique();
             
             e.HasOne(p => p.Order)
