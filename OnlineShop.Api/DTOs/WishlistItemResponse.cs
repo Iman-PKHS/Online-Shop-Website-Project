@@ -11,6 +11,7 @@ public class WishlistItemResponse
     public string? Message { get; set; }
     public int? StockLeft { get; set; }
     public DateTime AddedAt { get; set; }
-    public bool Purchased { get; set; }
     public DateTime? PurchasedAt { get; set; }
+    public bool Purchased { get; set; }
+    public bool? PurchasedManually { get; set; }
 }

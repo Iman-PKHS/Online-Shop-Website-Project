@@ -30,15 +30,16 @@ public class WishlistController : ControllerBase
             Name = wi.Item.Name,
             ImageUrl = wi.Item.ImageUrl,
             Price = wi.Item.Price,
-            IsAvailable = wi.Item.IsActive && wi.Item.StockQuantity > 0,
-            Message = wi.Item.IsActive && wi.Item.StockQuantity > 0
+            IsAvailable = wi.Item.IsActive && wi.Item.StockQuantity - wi.Item.ReservedQuantity > 0,
+            Message = wi.Item.IsActive && wi.Item.StockQuantity - wi.Item.ReservedQuantity > 0
                 ? null
                 : CartRules.UnavailableMessage,
-            StockLeft = wi.Item.IsActive && wi.Item.StockQuantity > 0 && wi.Item.StockQuantity < 10
-                ? wi.Item.StockQuantity
+            StockLeft = wi.Item.IsActive && wi.Item.StockQuantity - wi.Item.ReservedQuantity > 0 && wi.Item.StockQuantity - wi.Item.ReservedQuantity < 10
+                ? wi.Item.StockQuantity - wi.Item.ReservedQuantity
                 : (int?)null,
             AddedAt = wi.CreatedAt,
-            Purchased = false,
+            Purchased = wi.PurchasedOverride ?? false,
+            PurchasedManually = wi.PurchasedOverride,
             PurchasedAt = null
         };
     
@@ -245,9 +246,10 @@ public class WishlistController : ControllerBase
     ////Purchased Marking
     private async Task MarkPurchasedAsync(List<WishlistItemResponse> lines, int userId)
     {
-        if (lines.Count == 0) return;
+        var auto = lines.Where(l => l.PurchasedManually is null).ToList();
+        if (auto.Count == 0) return;
 
-        var ids = lines.Select(l => l.ItemId).ToList();
+        var ids = auto.Select(l => l.ItemId).ToList();
 
         var paidOrders = await _db.Payments
             .AsNoTracking()
@@ -271,7 +273,7 @@ public class WishlistController : ControllerBase
             .GroupBy(b => b.ItemId)
             .ToDictionary(g => g.Key, g => g.Max(b => paidAtByOrder[b.OrderId]));
 
-        foreach (var line in lines)
+        foreach (var line in auto)
         {
             if (latest.TryGetValue(line.ItemId, out var when) && when > line.AddedAt)
             {
@@ -280,10 +282,29 @@ public class WishlistController : ControllerBase
             }
         }
     }
-        
+    
+    [HttpPut("items/{itemId:int}/purchased")]
+    public async Task<IActionResult> SetPurchased(int itemId, SetPurchasedRequest request)
+    {
+        var userId = User.GetUserId();
+        if (userId is null) return Unauthorized();
 
+        var line = await _db.WishlistItems
+            .FirstOrDefaultAsync(wi => wi.ItemId == itemId && wi.Wishlist.UserId == userId.Value);
 
+        if (line is null)
+            return NotFound(new { message = "این مورد در علاقه‌مندی‌های شما پیدا نشد." });
 
+        line.PurchasedOverride = request.Purchased;
+        await _db.SaveChangesAsync();
 
+        var response = await _db.WishlistItems.AsNoTracking()
+            .Where(wi => wi.Id == line.Id)
+            .Select(ToLine)
+            .FirstAsync();
 
+        await MarkPurchasedAsync(new List<WishlistItemResponse> { response }, userId.Value);
+
+        return Ok(response);
+    }
 }

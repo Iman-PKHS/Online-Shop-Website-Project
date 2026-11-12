@@ -26,6 +26,10 @@ public class AppDbContext : DbContext
 
             e.Property(u => u.Username).UseCollation("NOCASE");
             e.Property(u => u.Email).UseCollation("NOCASE");
+
+            e.Property(u => u.PostalCode).HasMaxLength(10);
+            e.Property(u => u.Address).HasMaxLength(500);
+
         });
 
         modelBuilder.Entity<Item>(e =>
@@ -38,6 +42,8 @@ public class AppDbContext : DbContext
             {
                 t.HasCheckConstraint("CK_Items_Price", "Price >= 0");
                 t.HasCheckConstraint("CK_Items_StockQuantity", "StockQuantity >= 0");
+                t.HasCheckConstraint("CK_Items_ReservedQuantity", "ReservedQuantity >= 0 AND ReservedQuantity <= StockQuantity");
+
             });
 
         });
@@ -115,6 +121,11 @@ public class AppDbContext : DbContext
         {
             e.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(o => o.PaymentStatus).HasConversion<string>().HasMaxLength(20);
+
+            e.Property(o => o.ShippingPostalCode).HasMaxLength(10);
+            e.Property(o => o.ShippingAddress).HasMaxLength(500);
+            
+            e.HasIndex(o => new { o.Status, o.ExpiresAt });
             
             e.HasOne(o => o.User)
             .WithMany(u => u.Orders)

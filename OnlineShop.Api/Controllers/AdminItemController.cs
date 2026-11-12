@@ -6,6 +6,7 @@ using OnlineShop.Api.Data;
 using OnlineShop.Api.DTOs;
 using OnlineShop.Api.Entities;
 using OnlineShop.Api.Helpers;
+using OnlineShop.Api.Entities.Enums;
 
 namespace OnlineShop.Api.Controllers;
 
@@ -28,6 +29,8 @@ public class AdminItemController : ControllerBase
         Description = i.Description,
         Price = i.Price,
         StockQuantity = i.StockQuantity,
+        ReservedQuantity = i.ReservedQuantity,
+        AvailableQuantity = i.StockQuantity - i.ReservedQuantity,
         ImageUrl = i.ImageUrl,
         CreatedAt = i.CreatedAt,
         UpdatedAt = i.UpdatedAt,
@@ -60,6 +63,15 @@ public class AdminItemController : ControllerBase
             ? null
             : $"دسته‌بندی‌های نامعتبر یا غیرفعال: {string.Join(", ", bad)}";
     }
+
+    private record PendingUse(int OrderId, int Quantity, DateTime ExpiresAt);
+
+    private async Task<List<PendingUse>> GetPendingUseAsync(int itemId) =>
+        await _db.OrderItems
+            .AsNoTracking()
+            .Where(oi => oi.ItemId == itemId && oi.Order.Status == OrderStatus.Pending)
+            .Select(oi => new PendingUse(oi.OrderId, oi.Quantity, oi.Order.ExpiresAt))
+            .ToListAsync();
 
     ////Get
     [HttpGet]
@@ -209,24 +221,56 @@ public class AdminItemController : ControllerBase
     }
     //
 
-    //PUT by Id and StockQuantity
+    
+    ////PUT by Id and StockQuantity
     [HttpPut("{id:int}/stock")]
     public async Task<IActionResult> UpdateStock(int id, StockRequest request)
     {
-        var item = await _db.Items.FindAsync(id);
-        if (item is null)
+        var info = await _db.Items.AsNoTracking()
+            .Where(i => i.Id == id)
+            .Select(i => new { i.ReservedQuantity })
+            .FirstOrDefaultAsync();
+
+        if (info is null)
             return NotFound(new { message = "کالای مورد نظر یافت نشد." });
 
-        item.StockQuantity = request.Quantity;
-        item.UpdatedAt = DateTime.UtcNow;
+        // hard rule: never below what pending orders reserved
+        if (request.Quantity < info.ReservedQuantity)
+            return BadRequest(new
+            {
+                message = $"{info.ReservedQuantity} عدد توسط سفارش‌های در انتظار پرداخت رزرو شده است؛ موجودی نمی‌تواند کمتر از آن باشد.",
+                reservedQuantity = info.ReservedQuantity
+            });
 
-        await _db.SaveChangesAsync();
+        var pending = await GetPendingUseAsync(id);
 
-        return Ok(await LoadResponseAsync(item.Id));
+        if (pending.Count > 0 && !request.Confirm)
+            return Conflict(new
+            {
+                requiresConfirm = true,
+                message = $"این کالا در {pending.Count} سفارش در انتظار پرداخت هست ({info.ReservedQuantity} عدد رزرو). برای ادامه confirm را true بفرستید.",
+                pendingOrdersCount = pending.Count,
+                reservedQuantity = info.ReservedQuantity,
+                pendingOrderIds = pending.Select(p => p.OrderId).ToList()
+            });
+
+        var qty = request.Quantity;
+        var now = DateTime.UtcNow;
+
+        var updated = await _db.Items
+            .Where(i => i.Id == id && i.ReservedQuantity <= qty)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(i => i.StockQuantity, qty)
+                .SetProperty(i => i.UpdatedAt, now));
+
+        if (updated == 0)
+            return Conflict(new { message = "رزرو جدیدی ثبت شد. دوباره تلاش کنید." });
+
+        return Ok(await LoadResponseAsync(id));
     }
     //
 
-    //PUT by Id and Categories
+    ////PUT by Id and Categories
     [HttpPut("{id:int}/categories")]
     public async Task<IActionResult> SetCategories(int id, CategoryIdsRequest request)
     {
@@ -259,42 +303,31 @@ public class AdminItemController : ControllerBase
     }
     //
 
+    ////PUT by Id and Price
+    [HttpPut("{id:int}/price")]
+    public async Task<IActionResult> UpdatePrice(int id, PriceRequest request)
+    {
+        var item = await _db.Items.FindAsync(id);
+        if (item is null)
+            return NotFound(new { message = "کالای مورد نظر یافت نشد." });
 
+        var pending = await GetPendingUseAsync(id);
 
+        if (pending.Count > 0 && !request.Confirm)
+            return Conflict(new
+            {
+                requiresConfirm = true,
+                message = $"این کالا در {pending.Count} سفارش در انتظار پرداخت هست. قیمت آن سفارش‌ها تغییر نمی‌کند. برای ادامه باید تایید کنید.",
+                pendingOrdersCount = pending.Count,
+                pendingOrderIds = pending.Select(p => p.OrderId).ToList()
+            });
 
+        item.Price = request.Price;
+        item.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return Ok(await LoadResponseAsync(id));
+    }
 
 
 }

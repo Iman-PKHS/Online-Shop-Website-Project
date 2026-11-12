@@ -31,6 +31,9 @@ public class CheckoutController : ControllerBase
             InitiateOutcome.CartEmpty =>
                 BadRequest(new { message = "سبد خرید شما خالی است." }),
 
+            InitiateOutcome.AddressRequired =>
+                BadRequest(new { code = "address_required", message = "برای ادامه، کد پستی و آدرس خود را ثبت کنید." }),
+
             InitiateOutcome.ProblemsFound =>
                 Conflict(new
                 {

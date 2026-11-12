@@ -27,9 +27,10 @@ public class CustomerItemController : ControllerBase
         Description = i.Description,
         Price = i.Price,
         ImageUrl = i.ImageUrl,
-        InStock = i.StockQuantity > 0,
-        StockLeft = i.StockQuantity > 0 && i.StockQuantity < 10 
-            ? i.StockQuantity : (int?)null,
+        InStock = i.StockQuantity - i.ReservedQuantity > 0,
+        StockLeft = i.StockQuantity - i.ReservedQuantity > 0 && i.StockQuantity - i.ReservedQuantity < 10
+            ? i.StockQuantity - i.ReservedQuantity
+            : (int?)null,
         AverageRating = i.Ratings.Average(r => (double?)r.Stars),
         RatingCount = i.Ratings.Count(),
         CommentCount = i.Comments.Count(c => c.IsVisible),
@@ -128,7 +129,8 @@ public class CustomerItemController : ControllerBase
             query = query.Where(i => i.Price <= q.MaxPrice.Value);
 
         if (q.InStock == true)
-            query = query.Where(i => i.StockQuantity > 0);
+            query = query.Where(i => i.StockQuantity - i.ReservedQuantity > 0);
+        
         //
 
         ////Counting
@@ -153,7 +155,7 @@ public class CustomerItemController : ControllerBase
                 .Sum(oi => (int?)oi.Quantity) ?? 0)
                 .ThenByDescending(i => i.Id),
 
-                _ => query.OrderByDescending(i => i.StockQuantity > 0)
+                _ => query.OrderByDescending(i => i.StockQuantity - i.ReservedQuantity > 0)
                         .ThenByDescending(i => i.CreatedAt)
                         .ThenByDescending(i => i.Id)
         };

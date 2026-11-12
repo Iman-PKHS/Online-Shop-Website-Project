@@ -7,6 +7,7 @@ public class WishlistItem
     public int WishlistId { get; set;}
     public int ItemId { get; set;}
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool? PurchasedOverride { get; set; } //if null => based on systm decision
     //
     
     //Navigations

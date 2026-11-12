@@ -8,9 +8,14 @@ public class Order
     public int Id { get; set;}
     public int UserId { get; set;}
     public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
     public long TotalAmount { get; set;}
     public OrderStatus Status { get; set;}
     public PaymentStatus PaymentStatus { get; set;}
+    public string ShippingPostalCode { get; set; } = string.Empty;
+    public string ShippingAddress { get; set; } = string.Empty;
+    public DateTime? ShippingAddressChangedAt { get; set; }
     //
     
     //Navigations

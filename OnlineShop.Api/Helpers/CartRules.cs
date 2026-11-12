@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OnlineShop.Api.Data;
 using OnlineShop.Api.Entities;
+using OnlineShop.Api.Entities.Enums;
 
 namespace OnlineShop.Api.Helpers;
 
@@ -52,4 +53,16 @@ public static class CartRules
 
         return wishlist;
     }
+
+    public static async Task<Dictionary<int, int>> GetOwnReservedAsync(AppDbContext db, int userId)
+    {
+        var rows = await db.OrderItems
+            .AsNoTracking()
+            .Where(oi => oi.Order.UserId == userId && oi.Order.Status == OrderStatus.Pending)
+            .Select(oi => new { oi.ItemId, oi.Quantity })
+            .ToListAsync();
+
+        return rows.GroupBy(r => r.ItemId).ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
+    }
+
 }

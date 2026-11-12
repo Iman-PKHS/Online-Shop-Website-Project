@@ -9,6 +9,9 @@ public class User
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty; 
     public string PasswordHash { get; set; } = string.Empty;
+    public string? PostalCode { get; set; }
+    public string? Address { get; set; }
+    public DateTime? AddressUpdatedAt { get; set; }
     public UserRole Role { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

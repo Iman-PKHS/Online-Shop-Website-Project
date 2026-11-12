@@ -12,8 +12,10 @@ public static class ItemMappings
         Name = i.Name,
         Price = i.Price,
         ImageUrl = i.ImageUrl,
-        InStock = i.StockQuantity > 0,
-        StockLeft = i.StockQuantity > 0 && i.StockQuantity < 10 ? i.StockQuantity : (int?)null,
+        InStock = i.StockQuantity - i.ReservedQuantity > 0,
+        StockLeft = i.StockQuantity - i.ReservedQuantity > 0 && i.StockQuantity - i.ReservedQuantity < 10
+            ? i.StockQuantity - i.ReservedQuantity
+            : (int?)null,
         AverageRating = i.Ratings.Average(r => (double?)r.Stars),
         Categories = i.ItemCategories
             .Where(ic => ic.Category.IsActive)

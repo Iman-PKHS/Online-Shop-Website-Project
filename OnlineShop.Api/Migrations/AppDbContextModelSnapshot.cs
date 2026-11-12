@@ -187,6 +187,9 @@ namespace OnlineShop.Api.Migrations
                     b.Property<long>("Price")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("ReservedQuantity")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("StockQuantity")
                         .HasColumnType("INTEGER");
 
@@ -198,6 +201,8 @@ namespace OnlineShop.Api.Migrations
                     b.ToTable("Items", t =>
                         {
                             t.HasCheckConstraint("CK_Items_Price", "Price >= 0");
+
+                            t.HasCheckConstraint("CK_Items_ReservedQuantity", "ReservedQuantity >= 0 AND ReservedQuantity <= StockQuantity");
 
                             t.HasCheckConstraint("CK_Items_StockQuantity", "StockQuantity >= 0");
                         });
@@ -224,12 +229,31 @@ namespace OnlineShop.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PaymentStatus")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShippingAddress")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ShippingAddressChangedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShippingPostalCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -246,6 +270,8 @@ namespace OnlineShop.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "ExpiresAt");
 
                     b.ToTable("Orders");
                 });
@@ -368,6 +394,13 @@ namespace OnlineShop.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AddressUpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -383,6 +416,10 @@ namespace OnlineShop.Api.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PostalCode")
+                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Role")
@@ -437,6 +474,9 @@ namespace OnlineShop.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("ItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("PurchasedOverride")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("WishlistId")

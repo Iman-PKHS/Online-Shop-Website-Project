@@ -37,15 +37,21 @@ public class CartController : ControllerBase
                 ci.UnitPriceAtAdd,
                 ci.Quantity,
                 ci.Item.IsActive,
-                ci.Item.StockQuantity
+                ci.Item.StockQuantity,
+                ci.Item.ReservedQuantity
             })
             .ToListAsync();
 
+        var own = await CartRules.GetOwnReservedAsync(_db, userId);
+
         var lines = rows.Select(r =>
         {
-            var unavailable = !r.IsActive || r.StockQuantity == 0;
-            var notEnough = !unavailable && r.StockQuantity < r.Quantity;
+            var stock = r.StockQuantity - r.ReservedQuantity + own.GetValueOrDefault(r.ItemId);
+
+            var unavailable = !r.IsActive || stock <= 0;
+            var notEnough = !unavailable && stock < r.Quantity;
             var isAvailable = !unavailable && !notEnough;
+            var publicLeft = r.StockQuantity - r.ReservedQuantity;
 
             return new CartItemResponse
             {
@@ -57,13 +63,13 @@ public class CartController : ControllerBase
                 PriceAtAdd = r.UnitPriceAtAdd,
                 PriceChanged = r.CurrentPrice != r.UnitPriceAtAdd,
                 Quantity = r.Quantity,
+                StockLeft = publicLeft > 0 && publicLeft < 10 ? publicLeft : null,
                 LineTotal = r.CurrentPrice * r.Quantity,
                 IsAvailable = isAvailable,
                 Message = unavailable ? CartRules.UnavailableMessage
-                        : notEnough   ? CartRules.OnlyLeftMessage(r.StockQuantity)
+                        : notEnough   ? CartRules.OnlyLeftMessage(stock)
                         : null,
-                AvailableQuantity = notEnough ? r.StockQuantity : null,
-                StockLeft = r.StockQuantity > 0 && r.StockQuantity < 10 ? r.StockQuantity : null
+                AvailableQuantity = notEnough ? stock : null,
             };
         }).ToList();
 
@@ -88,7 +94,7 @@ public class CartController : ControllerBase
     }
 
     ////Post Item
-    [HttpPost("items")]
+   [HttpPost("items")]
     public async Task<IActionResult> Add(AddToCartRequest request)
     {
         var userId = User.GetUserId();
@@ -97,13 +103,16 @@ public class CartController : ControllerBase
         var item = await _db.Items
             .AsNoTracking()
             .Where(i => i.Id == request.ItemId)
-            .Select(i => new { i.Price, i.IsActive, i.StockQuantity })
+            .Select(i => new { i.Price, i.IsActive, i.StockQuantity, i.ReservedQuantity })
             .FirstOrDefaultAsync();
 
         if (item is null)
             return NotFound(new { message = "کالای مورد نظر یافت نشد." });
 
-        if (!item.IsActive || item.StockQuantity == 0)
+        var own = await CartRules.GetOwnReservedAsync(_db, userId.Value);
+        var available = item.StockQuantity - item.ReservedQuantity + own.GetValueOrDefault(request.ItemId);
+
+        if (!item.IsActive || available <= 0)
             return BadRequest(new { message = CartRules.UnavailableMessage });
 
         var cart = await CartRules.GetOrCreateCartAsync(_db, userId.Value);
@@ -115,7 +124,7 @@ public class CartController : ControllerBase
         {
             return Conflict(new
             {
-                message = "این کالا از قبل در سبد خرید شما هست.",
+                message = "این کالا از قبل در سبد خرید شما قرار گرفته شده است.",
                 cartItemId = line.Id,
                 currentQuantity = line.Quantity
             });
@@ -126,12 +135,8 @@ public class CartController : ControllerBase
         if (newQuantity > CartRules.MaxQuantity)
             return BadRequest(new { message = $"حداکثر تعداد برای هر کالا {CartRules.MaxQuantity} است." });
 
-        if (newQuantity > item.StockQuantity)
-            return BadRequest(new
-            {
-                message = CartRules.OnlyLeftMessage(item.StockQuantity),
-                availableQuantity = item.StockQuantity
-            });
+        if (newQuantity > available)
+            return BadRequest(new { message = CartRules.OnlyLeftMessage(available), availableQuantity = available });
 
         if (line is null)
         {
@@ -155,9 +160,7 @@ public class CartController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            ////double click
             return Conflict(new { message = "درخواست هم‌زمان ثبت شد. دوباره تلاش کنید." });
-            //
         }
 
         return Ok(await BuildCartAsync(userId.Value));
@@ -178,20 +181,21 @@ public class CartController : ControllerBase
         if (line is null)
             return NotFound(new { message = "این مورد در سبد خرید شما پیدا نشد." });
 
-        ////stock check fo increasing quantity
+        var own = await CartRules.GetOwnReservedAsync(_db, userId.Value);
+        var available = line.Item.StockQuantity - line.Item.ReservedQuantity + own.GetValueOrDefault(line.ItemId);
+
         if (request.Quantity > line.Quantity)
         {
-            if (!line.Item.IsActive || line.Item.StockQuantity == 0)
+            if (!line.Item.IsActive || available <= 0)
                 return BadRequest(new { message = CartRules.UnavailableMessage });
 
-            if (request.Quantity > line.Item.StockQuantity)
+            if (request.Quantity > available)
                 return BadRequest(new
                 {
-                    message = CartRules.OnlyLeftMessage(line.Item.StockQuantity),
-                    availableQuantity = line.Item.StockQuantity
+                    message = CartRules.OnlyLeftMessage(available),
+                    availableQuantity = available
                 });
         }
-        //
 
         line.Quantity = request.Quantity;
         line.UnitPriceAtAdd = line.Item.Price;

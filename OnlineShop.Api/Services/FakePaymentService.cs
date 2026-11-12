@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using OnlineShop.Api.Data;
 using OnlineShop.Api.DTOs;
 using OnlineShop.Api.Entities;
@@ -11,14 +12,31 @@ namespace OnlineShop.Api.Services;
 public class FakePaymentService : IPaymentService
 {
     private readonly AppDbContext _db;
+    private readonly IOrderLifecycleService _lifecycle;
+    private readonly CheckoutSettings _settings;
 
-    public FakePaymentService(AppDbContext db)
+    public FakePaymentService(
+        AppDbContext db,
+        IOrderLifecycleService lifecycle,
+        IOptions<CheckoutSettings> options)
     {
         _db = db;
+        _lifecycle = lifecycle;
+        _settings = options.Value;
     }
 
     public async Task<InitiateResult> InitiateAsync(int userId, string baseUrl)
     {
+        await _lifecycle.ExpireOverdueAsync(userId);
+
+        var user = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.PostalCode, u.Address })
+            .FirstAsync();
+
+        if (string.IsNullOrWhiteSpace(user.PostalCode) || string.IsNullOrWhiteSpace(user.Address))
+            return new InitiateResult { Outcome = InitiateOutcome.AddressRequired };
+
         var lines = await _db.CartItems
             .Include(ci => ci.Item)
             .Where(ci => ci.Cart.UserId == userId)
@@ -28,32 +46,52 @@ public class FakePaymentService : IPaymentService
         if (lines.Count == 0)
             return new InitiateResult { Outcome = InitiateOutcome.CartEmpty };
 
+        var now = DateTime.UtcNow;
+
+        //// resume with order
+        var pending = await _db.Orders
+            .Include(o => o.OrderItems)
+            .Include(o => o.Payments)
+            .Where(o => o.UserId == userId && o.Status == OrderStatus.Pending && o.ExpiresAt > now)
+            .OrderByDescending(o => o.Id)
+            .FirstOrDefaultAsync();
+
+        if (pending is not null && IsSameAsCart(pending, lines, user.PostalCode, user.Address))
+        {
+            var open = pending.Payments.FirstOrDefault(p => p.Status == PaymentStatus.Pending);
+            if (open is not null)
+                return Created(pending, open, baseUrl, resumed: true);
+        }
+        //
+
+        //// pre check
+        var own = await CartRules.GetOwnReservedAsync(_db, userId);
         var problems = new List<CheckoutProblem>();
         var toRemove = new List<CartItem>();
 
         foreach (var line in lines)
         {
             var item = line.Item;
+            var available = item.StockQuantity - item.ReservedQuantity + own.GetValueOrDefault(item.Id);
 
             if (!item.IsActive || item.StockQuantity == 0)
             {
+                //// really gone, remove from the cart and report
                 problems.Add(new CheckoutProblem
                 {
-                    ItemId = item.Id,
-                    Name = item.Name,
-                    Message = CartRules.UnavailableMessage,
-                    RemovedFromCart = true
+                    ItemId = item.Id, Name = item.Name,
+                    Message = CartRules.UnavailableMessage, RemovedFromCart = true
                 });
                 toRemove.Add(line);
             }
-            else if (item.StockQuantity < line.Quantity)
+            else if (available < line.Quantity)
             {
+                //// reserved by others, report, keep in the cart
                 problems.Add(new CheckoutProblem
                 {
-                    ItemId = item.Id,
-                    Name = item.Name,
-                    Message = CartRules.OnlyLeftMessage(item.StockQuantity),
-                    AvailableQuantity = item.StockQuantity
+                    ItemId = item.Id, Name = item.Name,
+                    Message = available <= 0 ? CartRules.UnavailableMessage : CartRules.OnlyLeftMessage(available),
+                    AvailableQuantity = Math.Max(available, 0)
                 });
             }
         }
@@ -65,40 +103,50 @@ public class FakePaymentService : IPaymentService
                 _db.CartItems.RemoveRange(toRemove);
                 await _db.SaveChangesAsync();
             }
-
-            return new InitiateResult 
-            {
-                Outcome = InitiateOutcome.ProblemsFound, Problems = problems
-            };
+            return new InitiateResult { Outcome = InitiateOutcome.ProblemsFound, Problems = problems };
         }
 
+        ////release the old order, reserve atomically, create the new order
         await using var tx = await _db.Database.BeginTransactionAsync();
 
-        ////Reattempt
-        var oldOrders = await _db.Orders
-            .Include(o => o.Payments)
+        var oldIds = await _db.Orders
             .Where(o => o.UserId == userId && o.Status == OrderStatus.Pending)
+            .Select(o => o.Id)
             .ToListAsync();
 
-        foreach (var old in oldOrders)
-        {
-            old.Status = OrderStatus.Cancelled;
-            old.PaymentStatus = PaymentStatus.Failed;
+        foreach (var oldId in oldIds)
+            await _lifecycle.CancelPendingOrderAsync(oldId, "با تلاش جدید جایگزین شد.");
 
-            foreach (var p in old.Payments.Where(p => p.Status == PaymentStatus.Pending))
+        foreach (var l in lines)
+        {
+            var itemId = l.ItemId;
+            var qty = l.Quantity;
+
+            var reserved = await _db.Items
+                .Where(i => i.Id == itemId && i.IsActive && i.StockQuantity - i.ReservedQuantity >= qty)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(i => i.ReservedQuantity, i => i.ReservedQuantity + qty));
+
+            if (reserved == 0)
             {
-                p.Status = PaymentStatus.Failed;
-                p.FailureReason = "جایگزین شد.";
+                await tx.RollbackAsync();   ////restores the old order and its reservation
+                return new InitiateResult
+                {
+                    Outcome = InitiateOutcome.ProblemsFound,
+                    Problems = await FreshShortfallsAsync(userId, lines)
+                };
             }
         }
-        //
 
         var order = new Order
         {
             UserId = userId,
-            OrderDate = DateTime.UtcNow,
+            OrderDate = now,
+            ExpiresAt = now.AddHours(_settings.ReservationHours),
             Status = OrderStatus.Pending,
             PaymentStatus = PaymentStatus.Pending,
+            ShippingPostalCode = user.PostalCode,
+            ShippingAddress = user.Address,
             OrderItems = lines.Select(l => new OrderItem
             {
                 ItemId = l.ItemId,
@@ -111,58 +159,107 @@ public class FakePaymentService : IPaymentService
 
         order.TotalAmount = order.OrderItems.Sum(oi => oi.LineTotal);
 
-        var payment = new Payment
-        {
-            Amount = order.TotalAmount,
-            Status = PaymentStatus.Pending
-        };
+        var payment = new Payment { Amount = order.TotalAmount, Status = PaymentStatus.Pending };
         order.Payments.Add(payment);
 
         _db.Orders.Add(order);
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        return new InitiateResult
+        return Created(order, payment, baseUrl, resumed: false);
+    }
+
+    private static bool IsSameAsCart(Order order, List<CartItem> lines, string postal, string address) =>
+        order.ShippingPostalCode == postal &&
+        order.ShippingAddress == address &&
+        order.OrderItems.Count == lines.Count &&
+        lines.All(l => order.OrderItems.Any(oi => oi.ItemId == l.ItemId && oi.Quantity == l.Quantity));
+
+    private static InitiateResult Created(Order order, Payment payment, string baseUrl, bool resumed) => new()
+    {
+        Outcome = InitiateOutcome.Created,
+        Response = new CheckoutResponse
         {
-            Outcome = InitiateOutcome.Created,
-            Response = new CheckoutResponse
-            {
-                OrderId = order.Id,
-                ReferenceId = payment.ReferenceId,
-                Amount = payment.Amount,
-                FakeGatewayUrl = $"{baseUrl}/fake-gateway/{payment.ReferenceId}"
-            }
-        };
+            OrderId = order.Id,
+            ReferenceId = payment.ReferenceId,
+            Amount = payment.Amount,
+            ExpiresAt = order.ExpiresAt,
+            IsResumed = resumed,
+            FakeGatewayUrl = $"{baseUrl}/fake-gateway/{payment.ReferenceId}"
+        }
+    };
+
+    private async Task<List<CheckoutProblem>> FreshShortfallsAsync(int userId, List<CartItem> lines)
+    {
+        var own = await CartRules.GetOwnReservedAsync(_db, userId);
+        var ids = lines.Select(l => l.ItemId).ToList();
+
+        var items = await _db.Items.AsNoTracking()
+            .Where(i => ids.Contains(i.Id))
+            .Select(i => new { i.Id, i.Name, i.IsActive, i.StockQuantity, i.ReservedQuantity })
+            .ToListAsync();
+
+        var list = new List<CheckoutProblem>();
+
+        foreach (var l in lines)
+        {
+            var i = items.First(x => x.Id == l.ItemId);
+            var available = i.StockQuantity - i.ReservedQuantity + own.GetValueOrDefault(i.Id);
+
+            if (!i.IsActive || available < l.Quantity)
+                list.Add(new CheckoutProblem
+                {
+                    ItemId = i.Id, Name = i.Name,
+                    Message = !i.IsActive || available <= 0 ? CartRules.UnavailableMessage : CartRules.OnlyLeftMessage(available),
+                    AvailableQuantity = Math.Max(available, 0)
+                });
+        }
+
+        if (list.Count == 0)
+            list.Add(new CheckoutProblem { ItemId = 0, Name = "", Message = "درخواست هم‌زمان ثبت شد. دوباره تلاش کنید." });
+
+        return list;
     }
 
     public async Task<CallbackResult> ProcessCallbackAsync(Guid referenceId, bool success)
-{
-    var payment = await _db.Payments
-        .AsNoTracking()
-        .Where(p => p.ReferenceId == referenceId)
-        .Select(p => new { p.Id, p.OrderId, p.Status })
-        .FirstOrDefaultAsync();
-
-    if (payment is null)
-        return new CallbackResult { Outcome = CallbackOutcome.NotFound };
-
-    // already processed: return the same result, change nothing
-    if (payment.Status != PaymentStatus.Pending)
-        return await ProcessedAsync(payment.Id, payment.OrderId);
-
-    if (!success)
     {
-        await FailAsync(payment.Id, payment.OrderId, "پرداخت توسط درگاه ناموفق اعلام شد.");
+        var payment = await _db.Payments
+            .AsNoTracking()
+            .Where(p => p.ReferenceId == referenceId)
+            .Select(p => new { p.Id, p.OrderId, p.Status })
+            .FirstOrDefaultAsync();
+
+        if (payment is null)
+            return new CallbackResult { Outcome = CallbackOutcome.NotFound };
+
+        if (payment.Status != PaymentStatus.Pending)
+            return await ProcessedAsync(payment.Id, payment.OrderId);
+
+        var now = DateTime.UtcNow;
+
+        ////overdue
+        var expired = await _db.Orders.AnyAsync(o =>
+            o.Id == payment.OrderId && o.Status == OrderStatus.Pending && o.ExpiresAt <= now);
+
+        if (expired)
+        {
+            await _lifecycle.CancelPendingOrderAsync(payment.OrderId, "مهلت ۷۲ ساعته پرداخت به پایان رسید.");
+            return await ProcessedAsync(payment.Id, payment.OrderId);
+        }
+
+        if (!success)
+        {
+            await _lifecycle.CancelPendingOrderAsync(payment.OrderId, "پرداخت توسط درگاه ناموفق اعلام شد.");
+            return await ProcessedAsync(payment.Id, payment.OrderId);
+        }
+
+        var (done, failReason) = await TryCompleteAsync(payment.Id, payment.OrderId);
+
+        if (!done && failReason is not null)
+            await _lifecycle.CancelPendingOrderAsync(payment.OrderId, failReason);
+
         return await ProcessedAsync(payment.Id, payment.OrderId);
     }
-
-    var (done, failReason) = await TryCompleteAsync(payment.Id, payment.OrderId);
-
-    if (!done && failReason is not null)
-        await FailAsync(payment.Id, payment.OrderId, failReason);
-
-    return await ProcessedAsync(payment.Id, payment.OrderId);
-}
 
     //// Callback
     private async Task<(bool Done, string? FailReason)> TryCompleteAsync(int paymentId, int orderId)
@@ -197,9 +294,10 @@ public class FakePaymentService : IPaymentService
             var qty = line.Quantity;
 
             var updated = await _db.Items
-                .Where(i => i.Id == itemId && i.IsActive && i.StockQuantity >= qty)
+                .Where(i => i.Id == itemId && i.ReservedQuantity >= qty && i.StockQuantity >= qty)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(i => i.StockQuantity, i => i.StockQuantity - qty)
+                    .SetProperty(i => i.ReservedQuantity, i => i.ReservedQuantity - qty)
                     .SetProperty(i => i.UpdatedAt, now));
 
             if (updated == 0)

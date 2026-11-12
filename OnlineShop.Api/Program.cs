@@ -44,7 +44,7 @@ var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
 
 if ( string.IsNullOrWhiteSpace(jwt.Key) || jwt.Key.Length < 32) 
     throw new InvalidOperationException
-        ("Jwt:Key is mmissing or shorter than 32 characters. Set it with dotnet user-secrets.");
+        ("Jwt:Key is missing or shorter than 32 characters. Set it with dotnet user-secrets.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -75,6 +75,12 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IPaymentService, FakePaymentService>();
 
+builder.Services.Configure<CheckoutSettings>(builder.Configuration.GetSection("Checkout"));
+
+builder.Services.AddScoped<IOrderLifecycleService, OrderLifecycleService>();
+
+builder.Services.AddHostedService<PendingOrderExpiryService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -89,8 +95,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-app.UseHttpsRedirection();
 
 app.UseHttpsRedirection();
 

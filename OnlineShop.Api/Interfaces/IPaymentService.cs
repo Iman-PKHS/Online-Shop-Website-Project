@@ -2,7 +2,7 @@ using OnlineShop.Api.DTOs;
 
 namespace OnlineShop.Api.Interfaces;
 
-public enum InitiateOutcome { Created, CartEmpty, ProblemsFound }
+public enum InitiateOutcome { Created, CartEmpty, ProblemsFound, AddressRequired }
 
 public class InitiateResult
 {

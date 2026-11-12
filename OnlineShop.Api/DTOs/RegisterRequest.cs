@@ -18,6 +18,12 @@ public class RegisterRequest
     [MaxLength(254)]
     public string Email { get; set; } = string.Empty;
 
+    [RegularExpression(@"^[0-99-۹٠-٩]{10}$", ErrorMessage = "کد پستی باید 10 رقم باشد.")]
+    public string? PostalCode { get; set; }
+
+    [StringLength(500, MinimumLength = 10, ErrorMessage = "آدرس باید بین 10 تا 500 کاراکتر باشد.")]
+    public string? Address { get; set; }
+
     [Required(ErrorMessage = "رمز عبور الزامی است.")]
     [StringLength(64, MinimumLength = 8, ErrorMessage = "رمز عبور باید بین 8 تا 64 کاراکتر باشد.")]
     public string Password { get; set; } = string.Empty;

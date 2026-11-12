@@ -48,13 +48,30 @@ public class AuthController : ControllerBase
 
         if (await _db.Users.AnyAsync(u => u.Email == email))
             return Conflict(new { message = "این ایمیل قبلاً ثبت شده است." });
+        
+        string? postal = null, address = null;
+        var hasPostal = !string.IsNullOrWhiteSpace(request.PostalCode);
+        var hasAddress = !string.IsNullOrWhiteSpace(request.Address);
+
+        if (hasPostal != hasAddress)
+            return BadRequest(new { message = "کد پستی و آدرس باید با هم ارسال شوند." });
+
+        if (hasPostal)
+        {
+            if (!AddressRules.TryNormalize(request.PostalCode, request.Address, out var p, out var a, out var err))
+                return BadRequest(new { message = err });
+            postal = p; address = a;
+        }
 
         var user = new User
         {
             Username = username,
             Email = email,
             PasswordHash = _passwords.HashPassword(request.Password),
-            Role = UserRole.Customer
+            Role = UserRole.Customer,
+            PostalCode = postal,
+            Address = address,
+            AddressUpdatedAt = postal is null ? null : DateTime.UtcNow,
         };
         
         _db.Users.Add(user);
