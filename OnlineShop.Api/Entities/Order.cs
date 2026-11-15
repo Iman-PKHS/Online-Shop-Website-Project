@@ -16,6 +16,8 @@ public class Order
     public string ShippingPostalCode { get; set; } = string.Empty;
     public string ShippingAddress { get; set; } = string.Empty;
     public DateTime? ShippingAddressChangedAt { get; set; }
+    public DateTime? ShippedAt { get; set; }
+    public DateTime? DeliveredAt { get; set; }  
     //
     
     //Navigations

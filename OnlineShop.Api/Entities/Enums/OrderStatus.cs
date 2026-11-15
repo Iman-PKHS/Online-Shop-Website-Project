@@ -3,7 +3,7 @@ public enum OrderStatus
 {
     Pending ,
     Paid , 
-    Shipping ,
+    Shipped ,
     Delivered ,
     Cancelled
 }

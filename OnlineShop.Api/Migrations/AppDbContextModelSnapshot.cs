@@ -232,6 +232,9 @@ namespace OnlineShop.Api.Migrations
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("TEXT");
 
@@ -241,6 +244,9 @@ namespace OnlineShop.Api.Migrations
                     b.Property<string>("PaymentStatus")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ShippedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ShippingAddress")
