@@ -32,8 +32,8 @@ public class AuthController : ControllerBase
         return int.TryParse(value, out var Id) ? Id : null;
     }
     
-    //Register
-    [HttpPost("register")]
+    ////Register
+    [HttpPost("Register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
         var username = TextNormalizer.NormalizeUsername(request.Username);
@@ -84,11 +84,16 @@ public class AuthController : ControllerBase
         {
             return Conflict(new { message = "این نام کاریری و یا ایمیل توسط کاربر دیگری درحال استفاده است." });
         }
-        return Ok(_tokens.CreateToken(user));
+        return StatusCode(StatusCodes.Status201Created, new
+        {
+            message = "ثبت نام با موفقیت انجام شد. لطفاً وارد شوید.",
+            userId = user.Id,
+            username = user.Username
+        });
     }
-    ////
+    //
     
-    //Login
+    ////Login
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
@@ -105,7 +110,7 @@ public class AuthController : ControllerBase
 
         return Ok(_tokens.CreateToken(user));
     }
-    ////
+    //
     
     [Authorize]
     [HttpPut("change-username")]
