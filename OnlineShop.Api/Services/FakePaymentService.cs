@@ -52,6 +52,7 @@ public class FakePaymentService : IPaymentService
         var pending = await _db.Orders
             .Include(o => o.OrderItems)
             .Include(o => o.Payments)
+            .AsSplitQuery()
             .Where(o => o.UserId == userId && o.Status == OrderStatus.Pending && o.ExpiresAt > now)
             .OrderByDescending(o => o.Id)
             .FirstOrDefaultAsync();

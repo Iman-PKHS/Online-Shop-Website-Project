@@ -34,7 +34,10 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlite => sqlite.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 
@@ -71,6 +74,41 @@ builder.Services
 
             NameClaimType = ClaimTypes.Name,
             RoleClaimType = ClaimTypes.Role
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var idText = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (!int.TryParse(idText, out var userId))
+                {
+                    context.Fail("invalid user id");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+
+                var user = await db.Users.AsNoTracking()
+                    .Where(u => u.Id == userId)
+                    .Select(u => new { u.IsActive, u.Role })
+                    .FirstOrDefaultAsync();
+
+                if (user is null || !user.IsActive)
+                {
+                    context.Fail("user disabled or missing");
+                    return;
+                }
+
+                if (context.Principal?.Identity is ClaimsIdentity identity)
+                {
+                    foreach (var claim in identity.FindAll(ClaimTypes.Role).ToList())
+                        identity.RemoveClaim(claim);
+
+                    identity.AddClaim(new Claim(ClaimTypes.Role, user.Role.ToString()));
+                }
+            }
         };
     });    
 
