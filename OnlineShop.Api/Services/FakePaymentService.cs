@@ -14,15 +14,18 @@ public class FakePaymentService : IPaymentService
     private readonly AppDbContext _db;
     private readonly IOrderLifecycleService _lifecycle;
     private readonly CheckoutSettings _settings;
+    private readonly ILogger<FakePaymentService> _log;
 
     public FakePaymentService(
         AppDbContext db,
         IOrderLifecycleService lifecycle,
-        IOptions<CheckoutSettings> options)
+        IOptions<CheckoutSettings> options,
+        ILogger<FakePaymentService> log)
     {
         _db = db;
         _lifecycle = lifecycle;
         _settings = options.Value;
+        _log = log;
     }
 
     public async Task<InitiateResult> InitiateAsync(int userId, string baseUrl)
@@ -163,9 +166,12 @@ public class FakePaymentService : IPaymentService
         var payment = new Payment { Amount = order.TotalAmount, Status = PaymentStatus.Pending };
         order.Payments.Add(payment);
 
+        // save the order and payment
         _db.Orders.Add(order);
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
+
+        _log.LogInformation("Checkout started for user {UserId}, order {OrderId}", userId, order.Id);
 
         return Created(order, payment, baseUrl, resumed: false);
     }
@@ -256,8 +262,16 @@ public class FakePaymentService : IPaymentService
 
         var (done, failReason) = await TryCompleteAsync(payment.Id, payment.OrderId);
 
-        if (!done && failReason is not null)
+        if (done)
+        {
+            _log.LogInformation("Payment {PaymentId} completed, order {OrderId}", payment.Id, payment.OrderId);
+        }
+        else if (failReason is not null)
+        {
+            _log.LogWarning("Payment {PaymentId} cancelled: {Reason}", payment.Id, failReason);
+            
             await _lifecycle.CancelPendingOrderAsync(payment.OrderId, failReason);
+        }
 
         return await ProcessedAsync(payment.Id, payment.OrderId);
     }

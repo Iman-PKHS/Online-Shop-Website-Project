@@ -18,12 +18,18 @@ public class AuthController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IPasswordService _passwords;
     private readonly ITokenService _tokens;
+    private readonly ILogger<AuthController> _log;
 
-    public AuthController(AppDbContext db, IPasswordService passwords, ITokenService tokens)
+    public AuthController(
+        AppDbContext db,
+        IPasswordService passwords,
+        ITokenService tokens,
+        ILogger<AuthController> log)
     {
         _db = db;
         _passwords = passwords;
         _tokens = tokens;
+        _log = log;
     }
 
     private int? GetUserId()
@@ -103,10 +109,13 @@ public class AuthController : ControllerBase
             u.Username == input || u.Email == input);
 
         if (user is null || !_passwords.VerifyPassword(request.Password, user.PasswordHash))
-            return Unauthorized(new { message = "حساب کاربری با این مشخصات یافت نشد."});
+        {
+            _log.LogWarning("Failed login attempt for {Input}", input);
+            return Unauthorized(new { message = "حساب کاربری با این مشخصات یافت نشد." });
+        }
 
         if (!user.IsActive)
-            return Unauthorized(new { message = "این حساب کاربری غیرفعال است."});
+            return Unauthorized(new { message = "این حساب کاربری غیرفعال است." });
 
         return Ok(_tokens.CreateToken(user));
     }

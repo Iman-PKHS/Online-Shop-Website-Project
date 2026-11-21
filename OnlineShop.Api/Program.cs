@@ -4,6 +4,7 @@ using OnlineShop.Api.Data;
 using OnlineShop.Api.Interfaces;
 using OnlineShop.Api.Services;
 using OnlineShop.Api.Helpers;
+using OnlineShop.Api.Middleware;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -11,10 +12,18 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers()
-    .AddJsonOptions(o =>
-        o.JsonSerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter()));
+builder.Services.AddControllers(o =>
+{
+    o.ModelBindingMessageProvider.SetValueIsInvalidAccessor(v => $"مقدار «{v}» معتبر نیست.");
+    o.ModelBindingMessageProvider.SetValueMustBeANumberAccessor(f => $"مقدار {f} باید عدد باشد.");
+    o.ModelBindingMessageProvider.SetMissingRequestBodyRequiredValueAccessor(() => "بدنه درخواست الزامی است.");
+    o.ModelBindingMessageProvider.SetUnknownValueIsInvalidAccessor(f => $"مقدار {f} نامعتبر است.");
+    o.ModelBindingMessageProvider.SetMissingBindRequiredValueAccessor(f => $"مقدار {f} الزامی است.");
+})
+
+.AddJsonOptions(o =>
+    o.JsonSerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -32,6 +41,13 @@ builder.Services.AddSwaggerGen(options =>
     {
         [new OpenApiSecuritySchemeReference("Bearer", document)] = []
     });
+
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Online Shop API",
+        Version = "v1",
+        Description = "Backend for the online shop"
+    });
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -44,6 +60,15 @@ builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddScoped<ITokenService, TokenService>();
+
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                    ?? Array.Empty<string>();
+
+builder.Services.AddCors(options =>
+    options.AddPolicy("frontend", policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()));
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
     ?? throw new InvalidOperationException("Missing 'Jwt' section in configuration.");
@@ -124,11 +149,15 @@ builder.Services.AddHostedService<PendingOrderExpiryService>();
 
 var app = builder.Build();
 
+app.UseMiddleware<ErrorHandlingMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
+    
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await DbSeeder.SeedAsync(db);
+    
+    await DbSeeder.SeedAsync(db, app.Configuration);
 }
     
 if (app.Environment.IsDevelopment())
@@ -138,6 +167,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("frontend"); 
 
 app.UseAuthentication();
 

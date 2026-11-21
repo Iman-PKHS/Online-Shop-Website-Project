@@ -16,11 +16,16 @@ public class AdminUsersController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IOrderLifecycleService _lifecycle;
+    private readonly ILogger<AdminUsersController> _log; 
 
-    public AdminUsersController(AppDbContext db, IOrderLifecycleService lifecycle)
+    public AdminUsersController(
+        AppDbContext db,
+        IOrderLifecycleService lifecycle,
+        ILogger<AdminUsersController> log)
     {
         _db = db;
         _lifecycle = lifecycle;
+        _log = log;
     }
 
 
@@ -168,6 +173,8 @@ public class AdminUsersController : ControllerBase
 
         await _db.Users.Where(u => u.Id == id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, false));
+        
+        _log.LogWarning("Admin {AdminId} disabled user {UserId}", me, id);
 
         var pendingIds = await _db.Orders.AsNoTracking()
             .Where(o => o.UserId == id && o.Status == OrderStatus.Pending)

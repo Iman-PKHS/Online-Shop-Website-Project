@@ -2,21 +2,27 @@ using Microsoft.EntityFrameworkCore;
 using OnlineShop.Api.Entities;
 using OnlineShop.Api.Entities.Enums;
 using OnlineShop.Api.Helpers;
+using Microsoft.Extensions.Configuration;
 
 namespace OnlineShop.Api.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AppDbContext db)
+    public static async Task SeedAsync(AppDbContext db, IConfiguration config)
     {
         // 1. Admin user
+        var adminPassword = config["Seed:AdminPassword"];
+
+        if (string.IsNullOrWhiteSpace(adminPassword) || adminPassword.Length < 8)
+            adminPassword = "Admin@12345";
+
         if (!await db.Users.AnyAsync(u => u.Role == UserRole.Admin))
         {
             db.Users.Add(new User
             {
                 Username = "admin",
                 Email = "admin@shop.local",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@12345"),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 Role = UserRole.Admin
             });
             await db.SaveChangesAsync();

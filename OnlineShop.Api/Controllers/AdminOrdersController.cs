@@ -16,11 +16,16 @@ public class AdminOrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IOrderLifecycleService _lifecycle;
+    private readonly ILogger<AdminUsersController> _log;
 
-    public AdminOrdersController(AppDbContext db, IOrderLifecycleService lifecycle)
+    public AdminOrdersController(
+        AppDbContext db,
+        IOrderLifecycleService lifecycle,
+        ILogger<AdminUsersController> log)
     {
         _db = db;
         _lifecycle = lifecycle;
+        _log = log;
     }
 
     //// Get order
@@ -216,6 +221,8 @@ public class AdminOrdersController : ControllerBase
                     .Where(o => o.Id == id).Select(o => o.Status).FirstAsync()).ToString()
             });
         }
+
+        _log.LogInformation("Admin changed order {OrderId} to {Status}", id, target);
 
         return await GetById(id);
     }

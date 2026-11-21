@@ -9,6 +9,8 @@ public class HealthController : ControllerBase
     [HttpGet]
     public IActionResult Get()
     {
+        // throw new Exception("test");
         return Ok(new { status = "ok" });
     }
+
 }
