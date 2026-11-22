@@ -120,6 +120,9 @@ public class AdminCategoryController : ControllerBase
         if (category is null)
             return NotFound(new { message = "دسته بندی مورد نظر یافت نشد." });
 
+        if (!category.IsActive)
+            return Conflict(new { message = "این دسته‌بندی غیرفعال است. ابتدا آن را بازیابی کنید." });
+
         var name = TextNormalizer.Normalize(request.Name);
         if (name.Length == 0)
             return BadRequest(new { message = "نام دسته بندی الزامی است." });
@@ -128,7 +131,6 @@ public class AdminCategoryController : ControllerBase
             return Conflict(new { message = "این دسته بندی قبلا ثبت شده است." });
 
         category.Name = name;
-        category.IsActive = request.IsActive;
 
         await _db.SaveChangesAsync();
 
@@ -151,7 +153,23 @@ public class AdminCategoryController : ControllerBase
     }
     //
 
+    ////Put ReActive the InActive
+    [HttpPut("{id:int}/restore")]
+    public async Task<IActionResult> Restore(int id)
+    {
+        var category = await _db.Categories.FindAsync(id);
+        if (category is null)
+            return NotFound(new { message = "دسته‌بندی مورد نظر یافت نشد." });
 
+        if (category.IsActive)
+            return Ok(ToResponse(category));
+
+        category.IsActive = true;
+        await _db.SaveChangesAsync();
+
+        return Ok(ToResponse(category));
+    }
+    //
 
 
 }

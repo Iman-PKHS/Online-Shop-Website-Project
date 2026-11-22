@@ -182,6 +182,9 @@ public class AdminItemController : ControllerBase
         var item = await _db.Items.FindAsync(id);
         if (item is null)
             return NotFound(new { message = "کالای مورد نظر یافت نشد." });
+        
+        if (!item.IsActive)
+            return Conflict(new { message = "این کالا غیرفعال است. ابتدا آن را بازیابی کنید." });
 
         var name = TextNormalizer.Normalize(request.Name);
         if (name.Length == 0)
@@ -195,7 +198,6 @@ public class AdminItemController : ControllerBase
         item.Description = description;
         item.Price = request.Price;
         item.ImageUrl = request.ImageUrl.Trim();
-        item.IsActive = request.IsActive;
         item.UpdatedAt = DateTime.UtcNow;
         
         await _db.SaveChangesAsync();
@@ -221,7 +223,32 @@ public class AdminItemController : ControllerBase
     }
     //
 
-    
+    ////Put ReActive the InActive
+    [HttpPut("{id:int}/restore")]
+    public async Task<IActionResult> Restore(int id)
+    {
+        var item = await _db.Items.FindAsync(id);
+        if (item is null)
+            return NotFound(new { message = "کالای مورد نظر یافت نشد." });
+
+        if (item.IsActive)
+            return Ok(await LoadResponseAsync(id));
+
+        //Item's name and description validation
+        var duplicate = await _db.Items.AnyAsync(i =>
+            i.Id != id && i.IsActive && i.Name == item.Name && i.Description == item.Description);
+
+        if (duplicate)
+            return Conflict(new { message = "کالای فعال دیگری با همین نام و توضیحات وجود دارد." });
+
+        item.IsActive = true;
+        item.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(await LoadResponseAsync(id));
+    }
+    //
+
     ////PUT by Id and StockQuantity
     [HttpPut("{id:int}/stock")]
     public async Task<IActionResult> UpdateStock(int id, StockRequest request)
